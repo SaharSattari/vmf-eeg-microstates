@@ -1,0 +1,160 @@
+#%% Load data
+import numpy as np
+clean_EC = np.load('clean_EC.npy')
+
+# %% von Mises-Fisher clustering 
+from sklearn.preprocessing import normalize
+from mle import mle_vmf
+
+
+# Initialize all_models as a nested list
+all_models = [[[] for _ in range(4)] for _ in range(12)]
+
+for subject in range (12):
+    for iteration in range (4):
+        if np.all(clean_EC[subject, iteration, :, :] == 0):
+            continue
+        else:
+            # normalize           
+            X = normalize(clean_EC[subject, iteration, :, :].T, norm="l2", axis=1)
+            print('vector size', np.sqrt(np.sum(X[100, :]**2)))
+
+            # correct topomap
+            reference_vector = X.mean(axis = 0)
+            for idx, row in enumerate(X):
+                if np.dot(row, reference_vector) < 0:
+                    X[idx] = -row
+       
+            num_of_clusters = 4
+            mix = mle_vmf(X, num_of_clusters)
+            all_models[subject][iteration].append(mix) 
+
+# %% visualize mus
+import pickle
+import mne
+import matplotlib.pyplot as plt
+from utils import extract_params
+from MS_measures import reorder_clusters
+
+with open('raw_info.pkl', 'rb') as f:
+    raw_info = pickle.load(f)
+with open('raw_montage.pkl', 'rb') as f:
+    raw_montage = pickle.load(f)
+
+for subject in range(12):
+    fig, axes = plt.subplots(4, 4, figsize=(12, 12))
+    fig.suptitle(f'Subject {subject + 1} - All Iterations')
+    plot_idx = 0
+    for iteration in range(4):
+        if not all_models[subject][iteration]:
+            continue
+
+        mix = all_models[subject][iteration][0]
+        # normalize           
+        X = normalize(clean_EC[subject, iteration, :, :].T, norm="l2", axis=1)
+        print('vector size', np.sqrt(np.sum(X[100, :]**2)))
+
+        # correct topomap
+        reference_vector = X.mean(axis = 0)
+        for idx, row in enumerate(X):
+            if np.dot(row, reference_vector) < 0:
+                X[idx] = -row
+        probabilities, kappa, mus = extract_params(mix, X)
+
+        reordered_probabilities, reordered_kappas, reordered_mus = reorder_clusters(
+            probabilities, kappa, mus
+        )
+        for i, mu in enumerate(reordered_mus):
+            ax = axes[iteration, i]
+            mne.viz.plot_topomap(mu, raw_info, axes=ax, show=False)
+            ax.set_title(f'Iter {iteration + 1}, Mu {i + 1}')
+    plt.tight_layout(rect=[0, 0, 1, 0.96])
+    plt.show()
+
+#%% extract microstate measures
+from MS_measures import ms_labels, ms_meanduration, ms_occurrence_rate, ms_time_coverage
+import torch
+
+for subject in range(12):
+    for iteration in range(4):
+        if not all_models[subject][iteration]:
+            continue
+
+        mix = all_models[subject][iteration][0]
+        # normalize           
+        X = normalize(clean_EC[subject, iteration, :, :].T, norm="l2", axis=1)
+        print('vector size', np.sqrt(np.sum(X[100, :]**2)))
+
+        # correct topomap
+        reference_vector = X.mean(axis = 0)
+        for idx, row in enumerate(X):
+            if np.dot(row, reference_vector) < 0:
+                X[idx] = -row
+
+        probabilities, kappa, mus = extract_params(mix, X)
+        reordered_probabilities, reordered_kappas, reordered_mus = reorder_clusters(
+            probabilities, kappa, mus
+        )
+        reordered_probabilities = numpy_array = torch.stack(reordered_probabilities).detach().cpu().numpy()
+        labels = ms_labels(reordered_probabilities, threshold=0.9)
+        mean_duration = ms_meanduration(np.array(labels))
+        occurrence_rate = ms_occurrence_rate(labels, 500)
+        time_coverage = ms_time_coverage(labels)
+
+        print(f'Subject {subject + 1}, Iteration {iteration + 1}:')
+        print(f'Mean Duration: {mean_duration}')
+        print(f'Occurrence Rate: {occurrence_rate}')
+
+# %% entropy of labels
+from MS_measures import labels_entropy, reorder_clusters
+from utils import extract_params
+import torch
+
+all_entropies = []
+for subject in range(1):
+    for iteration in range(1):
+        if not all_models[subject][iteration]:
+            continue
+
+        mix = all_models[subject][iteration][0]
+        # normalize           
+        X = normalize(clean_EC[subject, iteration, :, :].T, norm="l2", axis=1)
+        print('vector size', np.sqrt(np.sum(X[100, :]**2)))
+
+        # correct topomap
+        reference_vector = X.mean(axis = 0)
+        for idx, row in enumerate(X):
+            if np.dot(row, reference_vector) < 0:
+                X[idx] = -row
+
+        probabilities, kappa, mus = extract_params(mix, X)
+        reordered_probabilities, reordered_kappas, reordered_mus = reorder_clusters(
+            probabilities, kappa, mus
+        )
+        probabilities = torch.stack(reordered_probabilities).detach().cpu().numpy()
+        label_entropy = labels_entropy(probabilities)
+
+        all_entropies.append(label_entropy)
+
+#%% Visualize one entorpy example
+from visualization import scrolling_plot
+
+scrolling_plot(
+    window_size=500,
+    step_size=500,
+    fs=500,
+    time_series=np.array(all_entropies[0]).reshape(1, 90000)
+)
+#%% hypnogram visualization
+from visualization import hypnogram_plot
+
+hypnogram_plot(probabilities, 500)
+
+
+# %% Recurrence quantification analysis
+from visualization import recurrence_plot
+from sklearn.preprocessing import normalize
+X = normalize(clean_EC[0, 1, :, 30000:60000].T, norm="l2", axis=1)
+recurrence_plot(X.T, threshold=0.9)
+
+# %%
