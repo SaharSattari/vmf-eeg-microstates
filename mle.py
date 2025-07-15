@@ -10,7 +10,7 @@ def mle_vmf(X, num_of_clusters):
     opts["rll_tol"] = 1e-5  # tolerance of relative loglik improvement
 
     # randomly initialized mixture
-    mix = model.MixvMF(x_dim=X.shape[1], n_components=num_of_clusters)
+    mix = model.MixvMF(x_dim=X.shape[1], order=num_of_clusters)
     samples = torch.tensor(X, dtype=torch.float64)
 
     # EM learning
