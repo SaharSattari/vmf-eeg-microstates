@@ -1,11 +1,12 @@
-#%% Load data
+# %% Load data
 import numpy as np
-clean_EC_500 = np.load('clean_EC.npy')
+
+clean_EC_500 = np.load("clean_EC.npy")
 
 # down sample to 250 Hz
 clean_EC = clean_EC_500[:, :, :, ::2]
 
-# %% von Mises-Fisher clustering 
+# %% von Mises-Fisher clustering
 from sklearn.preprocessing import normalize
 from mle import mle_vmf
 
@@ -13,24 +14,24 @@ from mle import mle_vmf
 # Initialize all_models as a nested list
 all_models = [[[] for _ in range(4)] for _ in range(12)]
 
-for subject in range (12):
-    for iteration in range (4):
+for subject in range(12):
+    for iteration in range(4):
         if np.all(clean_EC[subject, iteration, :, :] == 0):
             continue
         else:
-            # normalize           
+            # normalize
             X = normalize(clean_EC[subject, iteration, :, :].T, norm="l2", axis=1)
-            print('vector size', np.sqrt(np.sum(X[100, :]**2)))
+            print("vector size", np.sqrt(np.sum(X[100, :] ** 2)))
 
             # correct topomap
-            reference_vector = X.mean(axis = 0)
+            reference_vector = X.mean(axis=0)
             for idx, row in enumerate(X):
                 if np.dot(row, reference_vector) < 0:
                     X[idx] = -row
-       
+
             num_of_clusters = 4
             mix = mle_vmf(X, num_of_clusters)
-            all_models[subject][iteration].append(mix) 
+            all_models[subject][iteration].append(mix)
 
 # %% visualize mus
 import pickle
@@ -39,26 +40,26 @@ import matplotlib.pyplot as plt
 from utils import extract_params
 from MS_measures import reorder_clusters
 
-with open('raw_info.pkl', 'rb') as f:
+with open("raw_info.pkl", "rb") as f:
     raw_info = pickle.load(f)
-with open('raw_montage.pkl', 'rb') as f:
+with open("raw_montage.pkl", "rb") as f:
     raw_montage = pickle.load(f)
 
 for subject in range(12):
     fig, axes = plt.subplots(4, 4, figsize=(12, 12))
-    fig.suptitle(f'Subject {subject + 1} - All Iterations')
+    fig.suptitle(f"Subject {subject + 1} - All Iterations")
     plot_idx = 0
     for iteration in range(4):
         if not all_models[subject][iteration]:
             continue
 
         mix = all_models[subject][iteration][0]
-        # normalize           
+        # normalize
         X = normalize(clean_EC[subject, iteration, :, :].T, norm="l2", axis=1)
-        print('vector size', np.sqrt(np.sum(X[100, :]**2)))
+        print("vector size", np.sqrt(np.sum(X[100, :] ** 2)))
 
         # correct topomap
-        reference_vector = X.mean(axis = 0)
+        reference_vector = X.mean(axis=0)
         for idx, row in enumerate(X):
             if np.dot(row, reference_vector) < 0:
                 X[idx] = -row
@@ -70,11 +71,11 @@ for subject in range(12):
         for i, mu in enumerate(reordered_mus):
             ax = axes[iteration, i]
             mne.viz.plot_topomap(mu, raw_info, axes=ax, show=False)
-            ax.set_title(f'Iter {iteration + 1}, Mu {i + 1}')
+            ax.set_title(f"Iter {iteration + 1}, Mu {i + 1}")
     plt.tight_layout(rect=[0, 0, 1, 0.96])
     plt.show()
 
-#%% extract microstate measures
+# %% extract microstate measures
 from MS_measures import ms_labels, ms_meanduration, ms_occurrence_rate, ms_time_coverage
 import torch
 
@@ -89,12 +90,12 @@ for subject in range(12):
             continue
 
         mix = all_models[subject][iteration][0]
-        # normalize           
+        # normalize
         X = normalize(clean_EC[subject, iteration, :, :].T, norm="l2", axis=1)
-        print('vector size', np.sqrt(np.sum(X[100, :]**2)))
+        print("vector size", np.sqrt(np.sum(X[100, :] ** 2)))
 
         # correct topomap
-        reference_vector = X.mean(axis = 0)
+        reference_vector = X.mean(axis=0)
         for idx, row in enumerate(X):
             if np.dot(row, reference_vector) < 0:
                 X[idx] = -row
@@ -103,7 +104,9 @@ for subject in range(12):
         reordered_probabilities, reordered_kappas, reordered_mus = reorder_clusters(
             probabilities, kappa, mus
         )
-        reordered_probabilities = numpy_array = torch.stack(reordered_probabilities).detach().cpu().numpy()
+        reordered_probabilities = numpy_array = (
+            torch.stack(reordered_probabilities).detach().cpu().numpy()
+        )
         labels = ms_labels(reordered_probabilities, threshold=0.9)
         mean_duration[subject, iteration] = ms_meanduration(np.array(labels))
         occurrence_rate[subject, iteration] = ms_occurrence_rate(labels, 250)
@@ -122,12 +125,12 @@ for subject in range(1):
             continue
 
         mix = all_models[subject][iteration][0]
-        # normalize           
+        # normalize
         X = normalize(clean_EC[subject, iteration, :, :].T, norm="l2", axis=1)
-        print('vector size', np.sqrt(np.sum(X[100, :]**2)))
+        print("vector size", np.sqrt(np.sum(X[100, :] ** 2)))
 
         # correct topomap
-        reference_vector = X.mean(axis = 0)
+        reference_vector = X.mean(axis=0)
         for idx, row in enumerate(X):
             if np.dot(row, reference_vector) < 0:
                 X[idx] = -row
@@ -141,16 +144,16 @@ for subject in range(1):
 
         all_entropies.append(label_entropy)
 
-#%% Visualize one entorpy example
+# %% Visualize one entorpy example
 from visualization import scrolling_plot
 
 scrolling_plot(
     window_size=500,
     step_size=500,
     fs=250,
-    time_series=np.array(all_entropies[0]).reshape(1, 90000)
+    time_series=np.array(all_entropies[0]).reshape(1, 90000),
 )
-#%% hypnogram visualization
+# %% hypnogram visualization
 from visualization import hypnogram_plot
 
 hypnogram_plot(probabilities, 250)
@@ -158,7 +161,13 @@ hypnogram_plot(probabilities, 250)
 
 # %% Recurrence quantification analysis
 from visualization import recurrence_plot
-from rqa import calculate_recurrence_matrix, recurrence_rate, determinism, laminarity, trapping_time
+from rqa import (
+    calculate_recurrence_matrix,
+    recurrence_rate,
+    determinism,
+    laminarity,
+    trapping_time,
+)
 from sklearn.preprocessing import normalize
 
 RR = np.zeros((12, 4))
@@ -168,11 +177,10 @@ TT = np.zeros((12, 4))
 
 for subject in range(12):
     for iteration in range(4):
-        if not all_models[subject][iteration]:
+        if np.all(clean_EC[subject, iteration, :, :] == 0):
             continue
 
-        mix = all_models[subject][iteration][0]
-        # normalize           
+        # normalize
         X = normalize(clean_EC[subject, iteration, :, :].T, norm="l2", axis=1)
 
         recurrence_matrix = calculate_recurrence_matrix(X.T, threshold=0.9)
@@ -185,13 +193,12 @@ for subject in range(12):
 
 # save results in a folder called RQA_results
 import os
-if not os.path.exists('RQA_results'):
-    os.makedirs('RQA_results')
-np.save('RQA_results/RR.npy', RR)
-np.save('RQA_results/DET.npy', DET)
-np.save('RQA_results/LAM.npy', LAM)
-np.save('RQA_results/TT.npy', TT)
+
+if not os.path.exists("RQA_results"):
+    os.makedirs("RQA_results")
+np.save("RQA_results/RR.npy", RR)
+np.save("RQA_results/DET.npy", DET)
+np.save("RQA_results/LAM.npy", LAM)
+np.save("RQA_results/TT.npy", TT)
 
 
-
-# %%
