@@ -58,13 +58,11 @@ def scrolling_plot(window_size, step_size, fs, time_series):
 
 def recurrence_plot(data, threshold=0.9):
 
-    recurrence_matrix = np.zeros((data.shape[1], data.shape[1]))
-    recurrence_matrix = abs(cosine_similarity(data.T, data.T))
+    recurrence_matrix = abs(cosine_similarity(data.T, data.T)).astype(np.float32)
 
     # binarize the recurrence matrix
-    recurrence_matrix[recurrence_matrix >= 0.9] = 1
-    recurrence_matrix[recurrence_matrix < 0.9] = 0
-
+    recurrence_matrix = (recurrence_matrix >= threshold)
+    
     # Wrap it in an xarray for Datashader
     img = xr.DataArray(recurrence_matrix, dims=["y", "x"])
 
@@ -82,7 +80,7 @@ def recurrence_plot(data, threshold=0.9):
 def hypnogram_plot(probabilities, fs):
 
     colors = plt.cm.Set2(np.linspace(0, 1, probabilities.shape[0]))
-    time = np.arange(probabilities.shape[1]) / (fs*60)
+    time = np.arange(probabilities.shape[1]) / (fs * 60)
     # Plot
     fig, ax = plt.subplots(figsize=(15, 5))
     ax.stackplot(time, probabilities, colors=colors)
@@ -90,7 +88,7 @@ def hypnogram_plot(probabilities, fs):
     ax.set_xlabel("Time (minutes)", fontsize=12)
     ax.set_ylabel("Probability", fontsize=12)
     ax.set_ylim(0, 1)
-    ax.legend(loc='upper right')
-    ax.grid(True, axis='y', linestyle='--', alpha=0.5)
+    ax.legend(loc="upper right")
+    ax.grid(True, axis="y", linestyle="--", alpha=0.5)
     plt.tight_layout()
     plt.show()

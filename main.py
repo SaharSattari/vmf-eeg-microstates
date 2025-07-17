@@ -1,6 +1,9 @@
 #%% Load data
 import numpy as np
-clean_EC = np.load('clean_EC.npy')
+clean_EC_500 = np.load('clean_EC.npy')
+
+# down sample to 250 Hz
+clean_EC = clean_EC_500[:, :, :, ::2]
 
 # %% von Mises-Fisher clustering 
 from sklearn.preprocessing import normalize
@@ -75,6 +78,11 @@ for subject in range(12):
 from MS_measures import ms_labels, ms_meanduration, ms_occurrence_rate, ms_time_coverage
 import torch
 
+mean_duration = np.zeros((12, 4), dtype=object)
+occurrence_rate = np.zeros((12, 4), dtype=object)
+time_coverage = np.zeros((12, 4), dtype=object)
+
+
 for subject in range(12):
     for iteration in range(4):
         if not all_models[subject][iteration]:
@@ -97,13 +105,10 @@ for subject in range(12):
         )
         reordered_probabilities = numpy_array = torch.stack(reordered_probabilities).detach().cpu().numpy()
         labels = ms_labels(reordered_probabilities, threshold=0.9)
-        mean_duration = ms_meanduration(np.array(labels))
-        occurrence_rate = ms_occurrence_rate(labels, 500)
-        time_coverage = ms_time_coverage(labels)
+        mean_duration[subject, iteration] = ms_meanduration(np.array(labels))
+        occurrence_rate[subject, iteration] = ms_occurrence_rate(labels, 250)
+        time_coverage[subject, iteration] = ms_time_coverage(labels)
 
-        print(f'Subject {subject + 1}, Iteration {iteration + 1}:')
-        print(f'Mean Duration: {mean_duration}')
-        print(f'Occurrence Rate: {occurrence_rate}')
 
 # %% entropy of labels
 from MS_measures import labels_entropy, reorder_clusters
@@ -142,19 +147,64 @@ from visualization import scrolling_plot
 scrolling_plot(
     window_size=500,
     step_size=500,
-    fs=500,
+    fs=250,
     time_series=np.array(all_entropies[0]).reshape(1, 90000)
 )
 #%% hypnogram visualization
 from visualization import hypnogram_plot
 
-hypnogram_plot(probabilities, 500)
+hypnogram_plot(probabilities, 250)
 
 
 # %% Recurrence quantification analysis
 from visualization import recurrence_plot
+from rqa import calculate_recurrence_matrix, recurrence_rate, determinism, laminarity, trapping_time
 from sklearn.preprocessing import normalize
-X = normalize(clean_EC[0, 1, :, 30000:60000].T, norm="l2", axis=1)
-recurrence_plot(X.T, threshold=0.9)
+
+RR = np.zeros((12, 4))
+DET = np.zeros((12, 4))
+LAM = np.zeros((12, 4))
+TT = np.zeros((12, 4))
+
+for subject in range(12):
+    for iteration in range(4):
+        if not all_models[subject][iteration]:
+            continue
+
+        mix = all_models[subject][iteration][0]
+        # normalize           
+        X = normalize(clean_EC[subject, iteration, :, :].T, norm="l2", axis=1)
+
+        recurrence_matrix = calculate_recurrence_matrix(X.T, threshold=0.9)
+        RR[subject, iteration] = recurrence_rate(recurrence_matrix)
+        DET[subject, iteration] = determinism(recurrence_matrix, l_min=2)
+        LAM[subject, iteration] = laminarity(recurrence_matrix, v_min=2)
+        TT[subject, iteration] = trapping_time(recurrence_matrix)
+
+        del recurrence_matrix
+
+# save results in a folder called RQA_results
+import os
+if not os.path.exists('RQA_results'):
+    os.makedirs('RQA_results')
+np.save('RQA_results/RR.npy', RR)
+np.save('RQA_results/DET.npy', DET)
+np.save('RQA_results/LAM.npy', LAM)
+np.save('RQA_results/TT.npy', TT)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 # %%
