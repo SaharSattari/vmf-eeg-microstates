@@ -1,83 +1,75 @@
-import numpy as np
-from collections import defaultdict
-from sklearn.metrics.pairwise import cosine_similarity
-from torch import threshold
-
+import torch
 
 def calculate_recurrence_matrix(data, threshold=0.9):
-    recurrence_matrix = abs(cosine_similarity(data.T, data.T)).astype(np.float32)
-    # binarize the recurrence matrix
-    return recurrence_matrix >= threshold
+
+    similarity = torch.matmul(data, data.T)
+    recurrence_matrix = (similarity.abs() >= threshold).float()
+    return recurrence_matrix
 
 
-def recurrence_rate(Recurrence_matrix):
-
-    N = Recurrence_matrix.shape[0]
-
-    return Recurrence_matrix.sum() / N**2
+def recurrence_rate(R):
+    N = R.shape[0]
+    return R.sum().item() / (N * N)
 
 
-def determinism(Recurrence_matrix, l_min=2):
-    N = Recurrence_matrix.shape[0]
-    diagline = defaultdict(int)
+def run_length_encoding(x):
+    """
+    Fast run-length encoding using PyTorch. x: 1D tensor of 0s and 1s
+    Returns lengths of 1s
+    """
+    diff = torch.diff(x)
+    run_starts = torch.where(diff == 1)[0] + 1
+    run_ends = torch.where(diff == -1)[0] + 1
+
+    if x[0] == 1:
+        run_starts = torch.cat([torch.tensor([0], device=x.device), run_starts])
+    if x[-1] == 1:
+        run_ends = torch.cat([run_ends, torch.tensor([x.shape[0]], device=x.device)])
+
+    run_lengths = run_ends - run_starts
+    return run_lengths
+
+
+def determinism(R, l_min=2):
+    N = R.shape[0]
+    det_total = 0
+    total = 0
 
     for k in range(1, N):
-        diag = np.diag(Recurrence_matrix, k)
-        length = 0
-        for val in diag:
-            if val == 1:
-                length += 1
-            else:
-                if length >= 1:
-                    diagline[length] += 1
-                length = 0
-        if length >= 1:
-            diagline[length] += 1  # handle line ending at edge
-    total_diag_points = sum(l * c for l, c in diagline.items())
-    det_diag_points = sum(l * c for l, c in diagline.items() if l >= l_min)
+        diag = torch.diagonal(R, offset=k)
+        run_lengths = run_length_encoding(diag)
+        long_runs = run_lengths[run_lengths >= l_min]
+        det_total += long_runs.sum().item()
+        total += run_lengths.sum().item()
 
-    return det_diag_points / total_diag_points
+    return det_total / total if total > 0 else 0
 
 
-def laminarity(Recurrence_matrix, v_min=2):
-    N = Recurrence_matrix.shape[0]
-    vertical_lines = defaultdict(int)
+def laminarity(R, v_min=2):
+    N = R.shape[0]
+    lam_total = 0
+    total = 0
 
     for col in range(N):
-        length = 0
-        for row in range(N):
-            if Recurrence_matrix[row, col] == 1:
-                length += 1
-            else:
-                if length >= 1:
-                    vertical_lines[length] += 1
-                length = 0
-        if length >= 1:
-            vertical_lines[length] += 1
+        col_data = R[:, col]
+        run_lengths = run_length_encoding(col_data)
+        long_runs = run_lengths[run_lengths >= v_min]
+        lam_total += long_runs.sum().item()
+        total += run_lengths.sum().item()
 
-    total_vert_points = sum(l * c for l, c in vertical_lines.items())
-    lam_vert_points = sum(l * c for l, c in vertical_lines.items() if l >= v_min)
-
-    return lam_vert_points / total_vert_points
+    return lam_total / total if total > 0 else 0
 
 
-def trapping_time(Recurrence_matrix, v_min=2):
-    N = Recurrence_matrix.shape[0]
-    vertical_lines = defaultdict(int)
+def trapping_time(R, v_min=2):
+    N = R.shape[0]
+    total_length = 0
+    total_lines = 0
 
     for col in range(N):
-        length = 0
-        for row in range(N):
-            if Recurrence_matrix[row, col] == 1:
-                length += 1
-            else:
-                if length >= 1:
-                    vertical_lines[length] += 1
-                length = 0
-        if length >= 1:
-            vertical_lines[length] += 1
+        col_data = R[:, col]
+        run_lengths = run_length_encoding(col_data)
+        long_runs = run_lengths[run_lengths >= v_min]
+        total_length += long_runs.sum().item()
+        total_lines += len(long_runs)
 
-    total_lines = sum(c for l, c in vertical_lines.items() if l >= v_min)
-    total_length = sum(l * c for l, c in vertical_lines.items() if l >= v_min)
-
-    return total_length / total_lines
+    return total_length / total_lines if total_lines > 0 else 0
