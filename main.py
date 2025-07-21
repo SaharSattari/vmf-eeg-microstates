@@ -10,7 +10,7 @@ clean_EC = clean_EC_500[:, :, :, ::2]
 from sklearn.preprocessing import normalize
 from mle import mle_vmf
 
-
+num_of_clusters = 4
 # Initialize all_models as a nested list
 all_models = [[[] for _ in range(4)] for _ in range(12)]
 
@@ -29,7 +29,7 @@ for subject in range(12):
                 if np.dot(row, reference_vector) < 0:
                     X[idx] = -row
 
-            num_of_clusters = 4
+            
             mix = mle_vmf(X, num_of_clusters)
             all_models[subject][iteration].append(mix)
 
@@ -42,11 +42,10 @@ from MS_measures import reorder_clusters
 
 with open("raw_info.pkl", "rb") as f:
     raw_info = pickle.load(f)
-with open("raw_montage.pkl", "rb") as f:
-    raw_montage = pickle.load(f)
+
 
 for subject in range(12):
-    fig, axes = plt.subplots(4, 4, figsize=(12, 12))
+    fig, axes = plt.subplots(4, num_of_clusters, figsize=(12, 12))
     fig.suptitle(f"Subject {subject + 1} - All Iterations")
     plot_idx = 0
     for iteration in range(4):
@@ -169,6 +168,7 @@ from rqa import (
     trapping_time,
 )
 from sklearn.preprocessing import normalize
+import torch
 
 RR = np.zeros((12, 4))
 DET = np.zeros((12, 4))
@@ -181,9 +181,11 @@ for subject in range(12):
             continue
 
         # normalize
-        X = normalize(clean_EC[subject, iteration, :, :].T, norm="l2", axis=1)
-
-        recurrence_matrix = calculate_recurrence_matrix(X.T, threshold=0.9)
+        X = clean_EC[subject, iteration, :, :] # shape: (T, C)
+        X_tensor = torch.from_numpy(X).float()
+        data_norm = torch.nn.functional.normalize(X_tensor.T, p=2, dim=1)  # shape: (T, C)
+    
+        recurrence_matrix = calculate_recurrence_matrix(data_norm, threshold=0.9)
         RR[subject, iteration] = recurrence_rate(recurrence_matrix)
         DET[subject, iteration] = determinism(recurrence_matrix, l_min=2)
         LAM[subject, iteration] = laminarity(recurrence_matrix, v_min=2)
@@ -202,3 +204,48 @@ np.save("RQA_results/LAM.npy", LAM)
 np.save("RQA_results/TT.npy", TT)
 
 
+
+# %% visualize
+from visualization import viz_rqa
+RR = np.load("RQA_results/RR.npy")
+DET = np.load("RQA_results/DET.npy")
+LAM = np.load("RQA_results/LAM.npy")
+TT = np.load("RQA_results/TT.npy")
+
+viz_rqa(RR, "Recurrence Rate")
+viz_rqa(DET, "Determinism")
+viz_rqa(LAM, "Laminarity")
+viz_rqa(TT, "Trapping Time")
+
+#%% Dataframe of all values 
+import pandas as pd
+rows = []
+for subject in range(12):
+    for iteration in range(4):
+        if not all_models[subject][iteration]:
+            continue
+        # Each microstate (assume 4 microstates)
+        for ms_idx in range(1,5):
+            row = {
+                "subject": subject + 1,
+                "iteration": iteration + 1,
+                "microstate": ms_idx,
+                "duration": mean_duration[subject, iteration][ms_idx] if mean_duration[subject, iteration] is not None else np.nan,
+                "occurrence": occurrence_rate[subject, iteration][ms_idx] if occurrence_rate[subject, iteration] is not None else np.nan,
+                "time_coverage": time_coverage[subject, iteration][ms_idx] if time_coverage[subject, iteration] is not None else np.nan,
+                "RR": RR[subject, iteration],
+                "DET": DET[subject, iteration],
+                "LAM": LAM[subject, iteration],
+                "TT": TT[subject, iteration],
+            }
+            rows.append(row)
+
+df = pd.DataFrame(rows)
+print(df.head())
+
+# %% scatter plot visualization
+import seaborn as sns
+
+sns.scatterplot(data=df, x="occurrence", y="LAM", hue="microstate")
+
+# %%
