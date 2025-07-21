@@ -92,3 +92,20 @@ def hypnogram_plot(probabilities, fs):
     ax.grid(True, axis="y", linestyle="--", alpha=0.5)
     plt.tight_layout()
     plt.show()
+
+
+
+def viz_rqa (input_measure, measure):
+
+    subjects = input_measure.shape[0]
+    sessions = input_measure.shape[1]
+    x = np.arange(sessions)
+    plt.figure(figsize=(10, 6))
+    for subj in range(subjects):
+        plt.plot(x, input_measure[subj, :], marker='o', label=f"Subject {subj+1}")
+    plt.xlabel("Session")
+    plt.ylabel(measure)
+    plt.legend()
+    plt.grid(True, linestyle="--", alpha=0.5)
+    plt.tight_layout()
+    plt.show()
