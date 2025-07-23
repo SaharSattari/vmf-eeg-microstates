@@ -62,7 +62,7 @@ for subject in range(12):
         for idx, row in enumerate(X):
             if np.dot(row, reference_vector) < 0:
                 X[idx] = -row
-        probabilities, kappa, mus = extract_params(mix, X)
+        probabilities, kappa, mus, logalpha = extract_params(mix, X)
 
         reordered_probabilities, reordered_kappas, reordered_mus = reorder_clusters(
             probabilities, kappa, mus
@@ -99,7 +99,7 @@ for subject in range(12):
             if np.dot(row, reference_vector) < 0:
                 X[idx] = -row
 
-        probabilities, kappa, mus = extract_params(mix, X)
+        probabilities, kappa, mus, logalpha = extract_params(mix, X)
         reordered_probabilities, reordered_kappas, reordered_mus = reorder_clusters(
             probabilities, kappa, mus
         )
@@ -134,7 +134,7 @@ for subject in range(1):
             if np.dot(row, reference_vector) < 0:
                 X[idx] = -row
 
-        probabilities, kappa, mus = extract_params(mix, X)
+        probabilities, kappa, mus, logalpha = extract_params(mix, X)
         reordered_probabilities, reordered_kappas, reordered_mus = reorder_clusters(
             probabilities, kappa, mus
         )
@@ -247,5 +247,73 @@ print(df.head())
 import seaborn as sns
 
 sns.scatterplot(data=df, x="occurrence", y="LAM", hue="microstate")
+
+# %% Extracting log likelihoods
+from sklearn.preprocessing import normalize
+from MS_measures import information_criterion
+
+bic = np.zeros((12, 4, 18))
+aic = np.zeros((12, 4, 18))
+ric = np.zeros((12, 4, 18))
+ricc = np.zeros((12, 4, 18))
+ebic = np.zeros((12, 4, 18))
+
+for subject in range(12):
+    for iteration in range (4):
+
+        # normalize
+        X = normalize(clean_EC[subject, iteration, :, :].T, norm="l2", axis=1)
+        # correct topomap
+        reference_vector = X.mean(axis=0)
+        for idx, row in enumerate(X):
+            if np.dot(row, reference_vector) < 0:
+                X[idx] = -row
+
+        bic[subject, iteration], aic[subject, iteration], ric[subject, iteration], ricc[subject, iteration], ebic[subject, iteration] = information_criterion(X, cluster_range=range(2, 20))
+
+#%% save bic, aic, ric, ricc, ebic
+import os
+if not os.path.exists("information_criteria"):
+    os.makedirs("information_criteria")
+np.save("information_criteria/bic.npy", bic)
+np.save("information_criteria/aic.npy", aic)
+np.save("information_criteria/ric.npy", ric)
+np.save("information_criteria/ricc.npy", ricc)
+np.save("information_criteria/ebic.npy", ebic)
+
+# %% visualize information criteria
+import matplotlib.pyplot as plt
+import seaborn as sns
+import numpy as np
+
+# load
+bic = np.load("information_criteria/bic.npy")
+aic = np.load("information_criteria/aic.npy")
+ric = np.load("information_criteria/ric.npy")
+ricc = np.load("information_criteria/ricc.npy")
+ebic = np.load("information_criteria/ebic.npy")
+
+
+plt.figure(figsize=(12, 8))
+for subject in range(12):
+    for iteration in range(4):
+        plt.plot(range(2, 20), bic[subject, iteration], label=f'Subject {subject+1}, Iteration {iteration+1} - BIC')
+        plt.plot(range(2, 20), aic[subject, iteration], label=f'Subject {subject+1}, Iteration {iteration+1} - AIC', linestyle='--')
+        plt.plot(range(2, 20), ric[subject, iteration], label=f'Subject {subject+1}, Iteration {iteration+1} - RIC', linestyle=':')
+        plt.plot(range(2, 20), ricc[subject, iteration], label=f'Subject {subject+1}, Iteration {iteration+1} - RICC', linestyle='-.')
+        plt.plot(range(2, 20), ebic[subject, iteration], label=f'Subject {subject+1}, Iteration {iteration+1} - EBIC', linestyle='dotted')
+
+# average across subjects and iterations
+avg_bic = np.mean(bic, axis=(0, 1))
+plt.figure()
+plt.plot(range(2, 20), avg_bic, label='Average BIC', color='black', linewidth=2, marker='o')
+plt.xlabel('Number of Clusters')
+plt.ylabel('BIC Value')
+plt.title('Average BIC across Subjects and Iterations')
+plt.xticks(range(2, 20))  # Set x-axis ticks to all numbers 2 to 19
+plt.legend()
+plt.grid()
+plt.show()
+
 
 # %%

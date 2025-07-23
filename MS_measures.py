@@ -2,6 +2,9 @@ from collections import defaultdict
 from collections import Counter
 from scipy.stats import entropy
 import numpy as np
+import torch
+from mle import mle_vmf
+
 
 
 def reorder_clusters(probabilities, kappas, mus):
@@ -108,3 +111,38 @@ def labels_entropy(probabilities):
         label_entropy[i] = entropy(probabilities[:, i])
 
     return label_entropy
+
+
+def information_criterion(data, cluster_range=range(2, 20)):
+
+    bic = []
+    aic = []
+    ric = []
+    ricc = []
+    ebic = []
+
+    for number_of_clusters in cluster_range:
+        mix = mle_vmf(data, number_of_clusters)
+
+        X_tensor = torch.from_numpy(data).float()
+        logliks, _ = mix(X_tensor)
+        total_log_likelihood = logliks.sum().item()
+
+        N = data.shape[0]
+        M = mix.order
+        d = mix.x_dim
+
+        num_params = (M - 1) + M * (d - 1) + M
+
+        bic.append(-2 * total_log_likelihood + num_params * np.log(N))
+        aic.append(-2 * total_log_likelihood + 2 * num_params)
+        ric.append(-2 * total_log_likelihood + num_params * 2 * np.log(d))
+        ricc.append(
+            -2 * total_log_likelihood + num_params * 2 * (np.log(d)+np.log(np.log(d)))
+        )
+        ebic.append(
+            -2 * total_log_likelihood + num_params * (np.log(N) + np.log(d))
+        )
+
+    return bic, aic, ric, ricc, ebic
+        

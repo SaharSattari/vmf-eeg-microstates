@@ -27,4 +27,4 @@ def extract_params(mixture_model, X):
 
     probabilities = posterior_probs
 
-    return probabilities, kappas, mus
+    return probabilities, kappas, mus, logalpha
