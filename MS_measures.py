@@ -11,15 +11,15 @@ def reorder_clusters(probabilities, kappas, mus):
     """
     Reorder clusters based on their kappa values in descending order.
     """
-    # if based on kappa only
-    #sorted_indices = sorted(range(len(kappas)), key=lambda i: kappas[i], reverse=True)
+    #if based on kappa only
+    sorted_indices = sorted(range(len(kappas)), key=lambda i: kappas[i], reverse=True)
 
     # if based on weighted kappa 
-    total_responsibility = probabilities.sum(axis=0)  # shape: (n_clusters,)
-    print(type(total_responsibility))
-    print(type(kappas))
-    weighted_kappa = total_responsibility.detach().numpy() * kappas
-    sorted_indices = np.argsort(weighted_kappa)[::-1]
+    # total_responsibility = probabilities.sum(axis=0)  # shape: (n_clusters,)
+    # print(type(total_responsibility))
+    # print(type(kappas))
+    # weighted_kappa = total_responsibility.detach().numpy() * kappas
+    # sorted_indices = np.argsort(weighted_kappa)[::-1]
 
 
     reordered_probabilities = [probabilities[:, i] for i in sorted_indices]

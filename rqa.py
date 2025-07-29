@@ -1,9 +1,21 @@
 import torch
 
-def calculate_recurrence_matrix(data, threshold=0.9):
-
+def calculate_recurrence_matrix(data, threshold=0.9, thresholding_type = 'fixed'):
     similarity = torch.matmul(data, data.T)
-    recurrence_matrix = (similarity.abs() >= threshold).float()
+    if thresholding_type == 'fixed':
+        print(similarity.abs().min(), similarity.abs().max())
+        recurrence_matrix = (similarity.abs() >= threshold).float()
+    elif thresholding_type == 'dynamic':
+        N = similarity.shape[0]
+        mask = ~torch.eye(N, dtype=bool, device=similarity.device)
+        sim_flat = similarity.abs()[mask]
+        k = int(0.05 * sim_flat.numel())
+        topk_values, _ = torch.topk(sim_flat, k)
+        threshold_value = topk_values.min()
+
+        print(f"Approximate 95th percentile threshold: {threshold_value.item():.4f}")
+        recurrence_matrix = (similarity.abs() >= threshold_value).float()
+
     return recurrence_matrix
 
 
