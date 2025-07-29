@@ -1,3 +1,5 @@
 .venv/
 clean_EC.npy
 raw_montage.pkl
+RQA_results/
+RQA_results_dynamic/
