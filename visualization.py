@@ -77,21 +77,45 @@ def recurrence_plot(data, threshold=0.9):
     image.to_pil().show()
 
 
-def hypnogram_plot(probabilities, fs):
+def hypnogram_plot(probabilities, fs, window=None):
+    """
+    Plots a hypnodensity graph for the specified time window.
 
-    colors = plt.cm.Set2(np.linspace(0, 1, probabilities.shape[0]))
-    time = np.arange(probabilities.shape[1]) / (fs * 60)
-    # Plot
-    fig, ax = plt.subplots(figsize=(15, 5))
-    ax.stackplot(time, probabilities, colors=colors)
-    ax.set_title("Hypnodensity Graph", fontsize=14)
-    ax.set_xlabel("Time (minutes)", fontsize=12)
-    ax.set_ylabel("Probability", fontsize=12)
+    Parameters:
+        probabilities (np.ndarray): Shape (n_classes, n_samples)
+        fs (float): Sampling frequency (Hz)
+        window (tuple or None): (start_sec, end_sec) to visualize in seconds. If None, plot all.
+    """
+    n_samples = probabilities.shape[1]
+    time = np.arange(n_samples) / fs  # time in seconds
+
+    # Determine window indices
+    if window is not None:
+        start_sec, end_sec = window
+        start_idx = int(start_sec * fs)
+        end_idx = int(end_sec * fs)
+        start_idx = max(0, start_idx)
+        end_idx = min(n_samples, end_idx)
+        time = time[start_idx:end_idx]
+        probs = probabilities[:, start_idx:end_idx]
+    else:
+        probs = probabilities
+
+    colors = plt.cm.tab10(np.linspace(0, 1, probabilities.shape[0]))
+    fig, ax = plt.subplots(figsize=(5, 3))
+    ax.stackplot(time, probs, colors=colors)
+    ax.set_title("Hypnodensity graph", fontsize=10)
+    ax.set_xlabel("Time (seconds)", fontsize=10)
+    ax.set_ylabel("Probability", fontsize=10)
     ax.set_ylim(0, 1)
     ax.legend(loc="upper right")
-    ax.grid(True, axis="y", linestyle="--", alpha=0.5)
+    ax.grid(True, axis="y", linestyle="--", alpha=1)
     plt.tight_layout()
     plt.show()
+
+
+
+
 
 
 

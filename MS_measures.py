@@ -7,7 +7,7 @@ from mle import mle_vmf
 
 
 
-def reorder_clusters(probabilities, kappas, mus):
+def reorder_clusters(probabilities, kappas, mus, logalphas):
     """
     Reorder clusters based on their kappa values in descending order.
     """
@@ -25,7 +25,8 @@ def reorder_clusters(probabilities, kappas, mus):
     reordered_probabilities = [probabilities[:, i] for i in sorted_indices]
     reordered_kappas = [kappas[i] for i in sorted_indices]
     reordered_mus = [mus[i] for i in sorted_indices]
-    return reordered_probabilities, reordered_kappas, reordered_mus
+    reordered_logalphas = [logalphas[i] for i in sorted_indices]
+    return reordered_probabilities, reordered_kappas, reordered_mus, reordered_logalphas
 
 
 def ms_labels(probabilities, threshold):
@@ -45,6 +46,7 @@ def ms_labels(probabilities, threshold):
 
 
 def ms_meanduration(labels):
+    labels = labels[::2]
     durations_by_state = defaultdict(list)
     current_label = labels[0]
     current_length = 1
@@ -53,14 +55,12 @@ def ms_meanduration(labels):
         if labels[i] == current_label:
             current_length += 1
         else:
-            if current_label != 0:
-                durations_by_state[current_label].append(current_length)
+            durations_by_state[current_label].append(current_length)
             current_label = labels[i]
             current_length = 1
 
-    # Handle the final segment
-    if current_label != 0:
-        durations_by_state[current_label].append(current_length)
+
+    durations_by_state[current_label].append(current_length)
 
     # Compute mean duration for each state
     mean_durations = {
@@ -68,7 +68,7 @@ def ms_meanduration(labels):
         for state, durations in durations_by_state.items()
     }
 
-    return mean_durations
+    return mean_durations, durations_by_state
 
 
 def ms_occurrence_rate(labels, sampling_rate):
@@ -77,9 +77,9 @@ def ms_occurrence_rate(labels, sampling_rate):
 
     # Start from index 1 to detect transitions
     for i in range(1, len(labels)):
-        if labels[i] != prev_label and labels[i] != 0:
+        if labels[i] != prev_label :
             occurrence_counts[labels[i]] += 1
-        elif i == 1 and labels[0] != 0:
+        elif i == 1 :
             # If the signal starts with a valid state
             occurrence_counts[labels[0]] += 1
         prev_label = labels[i]

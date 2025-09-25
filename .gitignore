@@ -1,5 +1,7 @@
 .venv/
 clean_EC.npy
+clean_EO.npy
 raw_montage.pkl
 RQA_results/
 RQA_results_dynamic/
+EEG_CSVs_rsEC/
