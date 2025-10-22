@@ -6,21 +6,19 @@ import torch
 from mle import mle_vmf
 
 
-
 def reorder_clusters(probabilities, kappas, mus, logalphas):
     """
     Reorder clusters based on their kappa values in descending order.
     """
-    #if based on kappa only
+    # if based on kappa only
     sorted_indices = sorted(range(len(kappas)), key=lambda i: kappas[i], reverse=True)
 
-    # if based on weighted kappa 
+    # if based on weighted kappa
     # total_responsibility = probabilities.sum(axis=0)  # shape: (n_clusters,)
     # print(type(total_responsibility))
     # print(type(kappas))
     # weighted_kappa = total_responsibility.detach().numpy() * kappas
     # sorted_indices = np.argsort(weighted_kappa)[::-1]
-
 
     reordered_probabilities = [probabilities[:, i] for i in sorted_indices]
     reordered_kappas = [kappas[i] for i in sorted_indices]
@@ -30,6 +28,12 @@ def reorder_clusters(probabilities, kappas, mus, logalphas):
 
 
 def ms_labels(probabilities, threshold):
+    if torch.is_tensor(probabilities):
+        probabilities = probabilities.detach().cpu().numpy()
+    elif isinstance(probabilities, (list, tuple)) and all(torch.is_tensor(p) for p in probabilities):
+        probabilities = np.stack([p.detach().cpu().numpy() for p in probabilities], axis=0)
+    else:
+        probabilities = np.array(probabilities)
     labels = []
 
     if threshold >= 0:
@@ -46,7 +50,8 @@ def ms_labels(probabilities, threshold):
 
 
 def ms_meanduration(labels):
-    labels = labels[::2]
+    labels = np.array(labels)
+
     durations_by_state = defaultdict(list)
     current_label = labels[0]
     current_length = 1
@@ -58,7 +63,6 @@ def ms_meanduration(labels):
             durations_by_state[current_label].append(current_length)
             current_label = labels[i]
             current_length = 1
-
 
     durations_by_state[current_label].append(current_length)
 
@@ -77,9 +81,9 @@ def ms_occurrence_rate(labels, sampling_rate):
 
     # Start from index 1 to detect transitions
     for i in range(1, len(labels)):
-        if labels[i] != prev_label :
+        if labels[i] != prev_label:
             occurrence_counts[labels[i]] += 1
-        elif i == 1 :
+        elif i == 1:
             # If the signal starts with a valid state
             occurrence_counts[labels[0]] += 1
         prev_label = labels[i]
@@ -138,11 +142,8 @@ def information_criterion(data, cluster_range=range(2, 20)):
         aic.append(-2 * total_log_likelihood + 2 * num_params)
         ric.append(-2 * total_log_likelihood + num_params * 2 * np.log(d))
         ricc.append(
-            -2 * total_log_likelihood + num_params * 2 * (np.log(d)+np.log(np.log(d)))
+            -2 * total_log_likelihood + num_params * 2 * (np.log(d) + np.log(np.log(d)))
         )
-        ebic.append(
-            -2 * total_log_likelihood + num_params * (np.log(N) + np.log(d))
-        )
+        ebic.append(-2 * total_log_likelihood + num_params * (np.log(N) + np.log(d)))
 
     return bic, aic, ric, ricc, ebic
-        
