@@ -81,40 +81,113 @@ reordered_probabilities, reordered_kappas, reordered_mus, reordered_logalphas = 
 # viz mus
 for i in range(num_of_clusters):
     mne.viz.plot_topomap(
-        reordered_mus[i], raw.info, cmap="RdBu_r", contours=0, vlim=(-1, 1), sensors=True
+        reordered_mus[i], raw.info, cmap="RdBu_r", contours=0, vlim=(-0.1, 0.1), sensors=True
     )
 
-# hypnodensity of probabilities
-from visualization import hypnogram_plot
+# %% try different filters and see the effect on microstate durations.
+from MS_measures import ms_meanduration, ms_labels
 
-probabilities_np = torch.stack(reordered_probabilities).detach().cpu().numpy()
+mean_durations_not = {}
+durations_by_state_not = {}
 
-hypnogram_plot(probabilities_np, 250, [1, 2])
+mean_durations_th = {}
+durations_by_state_th = {}
 
-labels = ms_labels(probabilities_np, threshold=0)
-meanduration, dur_by_state = ms_meanduration(labels)
-print("Mean Duration:", meanduration)
+for filter_band in [20, 30, 50, 80, 100]:
+    # Read the CSV file
+    df = pd.read_csv(csv_path)
+
+    # Assume columns: 'time', 'Fp1', 'Fp2', ..., 'Oz'
+    channel_names = [col for col in df.columns if col != "time"]
+    data = df[channel_names].values.T/ 1e6  # shape: (n_channels, n_times)
+    sfreq = 500  # or set according to your data
+
+    info = mne.create_info(channel_names, sfreq, ch_types="eeg")
+    raw = mne.io.RawArray(data, info)
+
+    # set montage
+    montage = mne.channels.make_standard_montage("standard_1020")
+    raw.set_montage(montage)
+
+    # re-reference to average
+    raw.set_eeg_reference('average', projection=False) 
+
+    # remove 60 Hz line noise
+    raw.notch_filter(60)
+
+    # filter from 0.5 to 100 Hz
+    raw.filter(1, filter_band, fir_design="firwin")
+
+    #ic label
+    ica = mne.preprocessing.ICA(n_components=0.99, random_state=97, max_iter=800, method = "infomax", fit_params=dict(extended=True))
+    ica.fit(raw)
+
+    ic_labels = label_components(raw, ica, method="iclabel")
+    labels = ic_labels["labels"]
+    exclude_idx = [
+        idx for idx, label in enumerate(labels) if label not in ["brain"]
+    ]
+    ica.apply(raw, exclude=exclude_idx) 
 
 
-# %% visualize durations by state
-import seaborn as sns
-import matplotlib.pyplot as plt
 
-# Convert durations to seconds
-dur_by_state_sec = {state: [d / 250 for d in durations] for state, durations in dur_by_state.items()}
-# Prepare data for seaborn
-data = []
-for state, durations in dur_by_state_sec.items():
-    for duration in durations:
-        data.append({"State": state, "Duration (s)": duration})
-df = pd.DataFrame(data)
-# Plot using seaborn
-plt.figure(figsize=(10, 6))
-sns.scatterplot(x="State", y="Duration (s)", data=df)
-plt.title("Microstate Durations by State")
-plt.xlabel("Microstate")
-plt.ylabel("Duration (seconds)")
-plt.ylim(0, 0.14)
-plt.grid(True, linestyle="--", alpha=0.5)
+    data = raw.get_data() 
+    # down sample to 250 Hz
+    data = data[:, ::2]
+
+    # normalize
+    X = normalize(data.T, norm="l2", axis=1)
+    print("vector size", np.sqrt(np.sum(X[100, :] ** 2)))
+
+    # correct topomap
+    reference_vector = X.mean(axis=0)
+    for idx, row in enumerate(X):
+        if np.dot(row, reference_vector) < 0:
+            X[idx] = -row
+
+    probabilities, kappa, mus, logalpha = extract_params(mix, X)
+    reordered_probabilities, reordered_kappas, reordered_mus, reordered_logalphas = reorder_clusters(
+        probabilities, kappa, mus, logalpha
+    )
+
+    labels_not = ms_labels(reordered_probabilities, threshold=-1)
+    labels_th = ms_labels(reordered_probabilities, threshold=0.9)
+
+
+    mean_durations_not[filter_band], durations_by_state_not[filter_band] = ms_meanduration(labels_not)
+    mean_durations_th[filter_band], durations_by_state_th[filter_band] = ms_meanduration(labels_th)
+
+
+# %% visualize
+
+# state label = 0 transition: only for durations_by_state_th
+state_label = 4
+
+
+# x = filter_bands: 20, 30, 50, 80, 100
+# y all values of durations_by_state_th[filter_band][state_label]
+
+x = list(durations_by_state_not.keys())
+
+x_flat = []
+y_flat = []
+
+for band in x:
+    ys = durations_by_state_not[band][state_label]
+    x_flat.extend([band] * len(ys))
+    y_flat.extend(ys)
+
+# convert categorical band values to positions and add jitter
+unique_bands = sorted(durations_by_state_not.keys())
+band_to_pos = {b: i for i, b in enumerate(unique_bands)}
+x_pos = np.array([band_to_pos[b] for b in x_flat]) + np.random.normal(0, 0.12, size=len(x_flat))
+
+plt.scatter(x_pos, y_flat, alpha=0.7, s=5)
+plt.xticks(range(len(unique_bands)), unique_bands)
+plt.xlabel('Upper bound of frequency (Hz)')
+plt.ylabel('Duration (samples)')
+plt.title(f'State {state_label}')
 plt.show()
+
+
 # %%
